@@ -55,25 +55,39 @@ common_return_status() {
 
 # Git status
 common_git_status() {
-    local message=""
+local dir="$PWD"
+    local is_repo=0
+    while [[ -n "$dir" ]]; do
+        if [[ -d "$dir/.git" ]]; then
+            is_repo=1
+            break
+        fi
+        if [[ "$dir" == "/" ]]; then break; fi
+        dir="${dir%/*}"
+        [[ -z "$dir" ]] && dir="/"
+    done
+    [[ $is_repo -eq 0 ]] && return
+
+    local ref
+    local status_out
+    status_out=$(git status --porcelain --branch 2>/dev/null)
+    
+    local first_line="${status_out%%$'\n'*}"
+    local branch="${first_line##\#\# }" 
+    branch="${branch%%...*}"
+
     local message_color="%F{$COMMON_COLORS_GIT_STATUS_DEFAULT}"
-
-    # https://git-scm.com/docs/git-status#_short_format
-    local staged=$(git status --porcelain 2>/dev/null | grep -e "^[MADRCU]")
-    local unstaged=$(git status --porcelain 2>/dev/null | grep -e "^[MADRCU? ][MADRCU?]")
-
-    if [[ -n ${staged} ]]; then
-        message_color="%F{$COMMON_COLORS_GIT_STATUS_STAGED}"
-    elif [[ -n ${unstaged} ]]; then
-        message_color="%F{$COMMON_COLORS_GIT_STATUS_UNSTAGED}"
+    if [[ -n $status_out ]]; then
+        local file_status="${status_out#*$'\n'}"
+        
+        if echo "$file_status" | grep -q "^[MADRCU]"; then
+            message_color="%F{$COMMON_COLORS_GIT_STATUS_STAGED}"
+        elif echo "$file_status" | grep -q "^.[MADRCU?]"; then
+            message_color="%F{$COMMON_COLORS_GIT_STATUS_UNSTAGED}"
+        fi
     fi
 
-    local branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
-    if [[ -n ${branch} ]]; then
-        message+="${message_color}${branch}%f"
-    fi
-
-    echo -n "${message}"
+    echo -n "${message_color}${branch}%f"
 }
 
 # Git prompt SHA
